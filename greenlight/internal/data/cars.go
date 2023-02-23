@@ -1,7 +1,10 @@
 package data
 
 import (
+	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"time"
 )
 
@@ -35,85 +38,157 @@ func (c CarModel) Insert(car *Car) error {
 	return c.DB.QueryRow(query, &car.Name, &car.Body, &car.BrakeSystem, &car.Aspiration, &car.Horsepower, &car.Mpg, &car.Cylinders, &car.Acceleration, &car.Displacement, &car.Origin).Scan(&car.ID, &car.CreatedAt, &car.Version)
 }
 
-//
-//// method for fetching a specific record from the movies table.
-//func (c CarModel) Get(id int64) (*Car, error) {
-//	if id < 1 {
-//		return nil, ErrRecordNotFound
-//	}
-//
-//	query := `
-//		SELECT *
-//		FROM movies
-//		WHERE id = $1`
-//
-//	var car Car
-//
-//	err := c.DB.QueryRow(query, id).Scan(
-//		&car.ID,
-//		&car.CreatedAt,
-//		&car.Title,
-//		&car.Year,
-//		&car.Runtime,
-//		pq.Array(&car.Genres),
-//		&car.Version,
-//	)
-//
-//	if err != nil {
-//		switch {
-//		case errors.Is(err, sql.ErrNoRows):
-//			return nil, ErrRecordNotFound
-//		default:
-//			return nil, err
-//		}
-//	}
-//
-//	return &car, nil
-//
-//}
-//
-//// method for updating a specific record in the movies table.
-//func (c CarModel) Update(car *Car) error {
-//	query := `
-//		UPDATE movies
-//		SET title = $1, year = $2, runtime = $3, genres = $4, version = version + 1
-//		WHERE id = $5
-//		RETURNING version`
-//
-//	args := []interface{}{
-//		car.Title,
-//		car.Year,
-//		car.Runtime,
-//		pq.Array(car.Genres),
-//		car.ID,
-//	}
-//
-//	return c.DB.QueryRow(query, args...).Scan(&car.Version)
-//}
-//
-//// method for deleting a specific record from the movies table.
-//func (c CarModel) Delete(id int64) error {
-//	if id < 1 {
-//		return ErrRecordNotFound
-//	}
-//	// Construct the SQL query to delete the record.
-//	query := `
-//		DELETE FROM movies
-//		WHERE id = $1`
-//
-//	result, err := c.DB.Exec(query, id)
-//	if err != nil {
-//		return err
-//	}
-//
-//	rowsAffected, err := result.RowsAffected()
-//	if err != nil {
-//		return err
-//	}
-//
-//	if rowsAffected == 0 {
-//		return ErrRecordNotFound
-//	}
-//
-//	return nil
-//}
+func (c CarModel) Get(id int64) (*Car, error) {
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+
+	query := `
+		SELECT *
+		FROM cars
+		WHERE id = $1`
+
+	var car Car
+
+	err := c.DB.QueryRow(query, id).Scan(
+		&car.ID,
+		&car.CreatedAt,
+		&car.Name,
+		&car.Body,
+		&car.BrakeSystem,
+		&car.Aspiration,
+		&car.Horsepower,
+		&car.Mpg,
+		&car.Cylinders,
+		&car.Acceleration,
+		&car.Displacement,
+		&car.Origin,
+		&car.Version,
+	)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &car, nil
+
+}
+
+func (c CarModel) Update(car *Car) error {
+	query := `
+		UPDATE cars
+		SET name = $1, body = $2, brake_system = $3, aspiration = $4, horsepower = $5, mpg = $6, cylinders = $7, acceleration = $8, displacement = $9, origin = $10, version = version + 1
+		WHERE id = $11 AND version = $12
+		RETURNING version`
+
+	args := []interface{}{
+		car.Name,
+		car.Body,
+		car.BrakeSystem,
+		car.Aspiration,
+		car.Horsepower,
+		car.Mpg,
+		car.Cylinders,
+		car.Acceleration,
+		car.Displacement,
+		car.Origin,
+		car.ID,
+		car.Version,
+	}
+
+	err := c.DB.QueryRow(query, args...).Scan(&car.Version)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+	}
+	return nil
+}
+
+func (c CarModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+
+	query := `
+		DELETE FROM cars
+		WHERE id = $1`
+
+	result, err := c.DB.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+
+	return nil
+}
+
+func (c CarModel) GetAll(title string, filters Filters) ([]*Car, Metadata, error) {
+	// Update the SQL query to include the window function which counts the total
+	// (filtered) records.
+	// (filtered) records.
+	query := fmt.Sprintf(`
+SELECT count(*) OVER(), id, created_at, name, body, brake_system, aspiration,horsepower,mpg,cylinders,acceleration,displacement,origin, version
+FROM cars
+WHERE (to_tsvector('simple', name) @@ plainto_tsquery('simple', $1) OR $1 = '')
+ORDER BY %s %s, id ASC
+LIMIT $2 OFFSET $3`, filters.sortColumn(), filters.sortDirection())
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	args := []any{title, filters.limit(), filters.offset()}
+	rows, err := c.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, Metadata{}, err // Update this to return an empty Metadata struct.
+	}
+	defer rows.Close()
+	// Declare a totalRecords variable.
+	totalRecords := 0
+	cars := []*Car{}
+	for rows.Next() {
+		var car Car
+		err := rows.Scan(
+			&totalRecords, // Scan the count from the window function into totalRecords.
+			&car.ID,
+			&car.CreatedAt,
+			&car.Name,
+			&car.Body,
+			&car.BrakeSystem,
+			&car.Aspiration,
+			&car.Horsepower,
+			&car.Mpg,
+			&car.Cylinders,
+			&car.Acceleration,
+			&car.Displacement,
+			&car.Origin,
+			&car.Version,
+		)
+		if err != nil {
+			return nil, Metadata{}, err // Update this to return an empty Metadata struct.
+		}
+		cars = append(cars, &car)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, Metadata{}, err // Update this to return an empty Metadata struct.
+	}
+	// Generate a Metadata struct, passing in the total record count and pagination
+	// parameters from the client.
+	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+	// Include the metadata struct when returning.
+	return cars, metadata, nil
+}
