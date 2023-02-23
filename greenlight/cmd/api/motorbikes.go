@@ -8,14 +8,13 @@ import (
 	"net/http"
 )
 
-func (app *application) createCarHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) createMotorbikeHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Name         string  `json:"name"`
-		Body         string  `json:"body"`
-		BrakeSystem  string  `json:"brake_system"`
-		Aspiration   string  `json:"aspiration"`
 		Horsepower   float64 `json:"horsepower"`
-		Mpg          float64 `json:"mpg"`
+		Type         string  `json:"type"`
+		Weight       float64 `json:"weight"`
+		ThirdPlace   bool    `json:"third_place"`
 		Cylinders    int64   `json:"cylinders"`
 		Acceleration float64 `json:"acceleration"`
 		Displacement float64 `json:"displacement"`
@@ -32,22 +31,16 @@ func (app *application) createCarHandler(w http.ResponseWriter, r *http.Request)
 	v.Check(input.Name != "", "name", "must be provided")
 	v.Check(len(input.Name) <= 500, "name", "must not be more than 500 bytes long")
 
-	v.Check(input.Body != "", "body", "must be provided")
-	v.Check(len(input.Body) <= 50, "body", "must not be more than 50 bytes long")
-
-	v.Check(input.BrakeSystem != "", "brake_system", "must be provided")
-	v.Check(len(input.BrakeSystem) <= 50, "brake_system", "must not be more than 50 bytes long")
-
-	v.Check(input.Aspiration != "", "aspiration", "must be provided")
-	v.Check(len(input.Aspiration) <= 50, "aspiration", "must not be more than 50 bytes long")
+	v.Check(input.Type != "", "type", "must be provided")
 
 	v.Check(input.Horsepower != 0, "horsepower", "must be provided")
 	v.Check(input.Horsepower <= 2000, "horsepower", "must be less than 2000")
 
-	v.Check(input.Mpg != 0, "mpg", "must be provided")
+	v.Check(input.Weight != 0, "weight", "must be provided")
+	v.Check(input.Weight <= 1000, "weight", "must be less than 1000kg")
 
 	v.Check(input.Cylinders != 0, "cylinders", "must be provided")
-	v.Check(input.Cylinders%2 == 0 && input.Cylinders != 2, "cylinders", "must be 4, 6, 8, 12 etc...")
+	v.Check(input.Cylinders%2 == 0, "cylinders", "must be 2, 4 etc...")
 
 	v.Check(input.Acceleration != 0, "acceleration", "must be provided")
 
@@ -62,42 +55,42 @@ func (app *application) createCarHandler(w http.ResponseWriter, r *http.Request)
 	}
 	fmt.Fprintf(w, "%+v\n", input)
 
-	car := &data.Car{
+	motorbike := &data.Motorbike{
 		Name:         input.Name,
-		Body:         input.Body,
-		BrakeSystem:  input.BrakeSystem,
-		Aspiration:   input.Aspiration,
 		Horsepower:   input.Horsepower,
-		Mpg:          input.Mpg,
+		Type:         input.Type,
+		Weight:       input.Weight,
+		ThirdPlace:   input.ThirdPlace,
 		Cylinders:    input.Cylinders,
 		Acceleration: input.Acceleration,
 		Displacement: input.Displacement,
 		Origin:       input.Origin,
 	}
 
-	err = app.models.Cars.Insert(car)
+	err = app.models.MotorBikes.Insert(motorbike)
+
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
 
 	headers := make(http.Header)
-	headers.Set("Location", fmt.Sprintf("/v1/cars/%d", car.ID))
+	headers.Set("Location", fmt.Sprintf("/v1/motorbikes/%d", motorbike.ID))
 
-	err = app.writeJSON(w, http.StatusCreated, envelope{"car": car}, headers)
+	err = app.writeJSON(w, http.StatusCreated, envelope{"motorbike": motorbike}, headers)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 
 }
 
-func (app *application) showCarHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) showMotorbikeHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
 		app.notFoundResponse(w, r)
 	}
 
-	car, err := app.models.Cars.Get(id)
+	motorbike, err := app.models.MotorBikes.Get(id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -109,20 +102,20 @@ func (app *application) showCarHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Encode the struct to JSON and send it as the HTTP response.
 	// using envelope
-	err = app.writeJSON(w, http.StatusOK, envelope{"car": car}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"motorbike": motorbike}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 }
 
-func (app *application) updateCarHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) updateMotorbikeHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
 		app.notFoundResponse(w, r)
 		return
 	}
 	// Retrieve the movie record as normal.
-	car, err := app.models.Cars.Get(id)
+	motorbike, err := app.models.MotorBikes.Get(id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -136,11 +129,10 @@ func (app *application) updateCarHandler(w http.ResponseWriter, r *http.Request)
 	// Use pointers for the Title, Year and Runtime fields.
 	var input struct {
 		Name         *string  `json:"name"`
-		Body         *string  `json:"body"`
-		BrakeSystem  *string  `json:"brake_system"`
-		Aspiration   *string  `json:"aspiration"`
 		Horsepower   *float64 `json:"horsepower"`
-		Mpg          *float64 `json:"mpg"`
+		Type         *string  `json:"type"`
+		Weight       *float64 `json:"weight"`
+		ThirdPlace   *bool    `json:"third_place"`
 		Cylinders    *int64   `json:"cylinders"`
 		Acceleration *float64 `json:"acceleration"`
 		Displacement *float64 `json:"displacement"`
@@ -154,66 +146,57 @@ func (app *application) updateCarHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	if input.Name != nil {
-		car.Name = *input.Name
+		motorbike.Name = *input.Name
 	}
 	// We also do the same for the other fields in the input struct.
-	if input.Body != nil {
-		car.Body = *input.Body
-	}
-	if input.BrakeSystem != nil {
-		car.BrakeSystem = *input.BrakeSystem
-	}
-	if input.Aspiration != nil {
-		car.Aspiration = *input.Aspiration // Note that we don't need to dereference a slice.
-	}
 	if input.Horsepower != nil {
-		car.Horsepower = *input.Horsepower
+		motorbike.Horsepower = *input.Horsepower
+	}
+	if input.Type != nil {
+		motorbike.Type = *input.Type
+	}
+	if input.Weight != nil {
+		motorbike.Weight = *input.Weight // Note that we don't need to dereference a slice.
 	}
 	// We also do the same for the other fields in the input struct.
-	if input.Mpg != nil {
-		car.Mpg = *input.Mpg
+	if input.ThirdPlace != nil {
+		motorbike.ThirdPlace = *input.ThirdPlace
 	}
 	if input.Cylinders != nil {
-		car.Cylinders = *input.Cylinders
+		motorbike.Cylinders = *input.Cylinders
 	}
 	if input.Acceleration != nil {
-		car.Acceleration = *input.Acceleration // Note that we don't need to dereference a slice.
+		motorbike.Acceleration = *input.Acceleration // Note that we don't need to dereference a slice.
 	}
 	if input.Displacement != nil {
-		car.Displacement = *input.Displacement
+		motorbike.Displacement = *input.Displacement
 	}
 	if input.Origin != nil {
-		car.Origin = *input.Origin // Note that we don't need to dereference a slice.
+		motorbike.Origin = *input.Origin // Note that we don't need to dereference a slice.
 	}
 
 	v := validator.New()
 
-	v.Check(car.Name != "", "name", "must be provided")
-	v.Check(len(car.Name) <= 500, "name", "must not be more than 500 bytes long")
+	v.Check(motorbike.Name != "", "name", "must be provided")
+	v.Check(len(motorbike.Name) <= 500, "name", "must not be more than 500 bytes long")
 
-	v.Check(car.Body != "", "body", "must be provided")
-	v.Check(len(car.Body) <= 50, "body", "must not be more than 50 bytes long")
+	v.Check(motorbike.Horsepower != 0, "horsepower", "must be provided")
+	v.Check(motorbike.Horsepower <= 2000, "horsepower", "must be less than 2000")
 
-	v.Check(car.BrakeSystem != "", "brake_system", "must be provided")
-	v.Check(len(car.BrakeSystem) <= 50, "brake_system", "must not be more than 50 bytes long")
+	v.Check(motorbike.Type != "", "type", "must be provided")
+	v.Check(len(motorbike.Type) <= 50, "type", "must not be more than 50 bytes long")
 
-	v.Check(car.Aspiration != "", "aspiration", "must be provided")
-	v.Check(len(car.Aspiration) <= 50, "aspiration", "must not be more than 50 bytes long")
+	v.Check(motorbike.Weight != 0, "weight", "must be provided")
 
-	v.Check(car.Horsepower != 0, "horsepower", "must be provided")
-	v.Check(car.Horsepower <= 2000, "horsepower", "must be less than 2000")
+	v.Check(motorbike.Cylinders != 0, "cylinders", "must be provided")
+	v.Check(motorbike.Cylinders%2 == 0, "cylinders", "must be 2, 4 etc...")
 
-	v.Check(car.Mpg != 0, "mpg", "must be provided")
+	v.Check(motorbike.Acceleration != 0, "acceleration", "must be provided")
 
-	v.Check(car.Cylinders != 0, "cylinders", "must be provided")
-	v.Check(car.Cylinders%2 == 0 && car.Cylinders != 2, "cylinders", "must be 4, 6, 8, 12 etc...")
+	v.Check(motorbike.Displacement != 0, "displacement", "must be provided")
 
-	v.Check(car.Acceleration != 0, "acceleration", "must be provided")
-
-	v.Check(car.Displacement != 0, "displacement", "must be provided")
-
-	v.Check(car.Origin != "", "origin", "must be provided")
-	v.Check(len(car.Origin) <= 50, "origin", "must not be more than 50 bytes long")
+	v.Check(motorbike.Origin != "", "origin", "must be provided")
+	v.Check(len(motorbike.Origin) <= 50, "origin", "must not be more than 50 bytes long")
 
 	if !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
@@ -221,7 +204,7 @@ func (app *application) updateCarHandler(w http.ResponseWriter, r *http.Request)
 	}
 	fmt.Fprintf(w, "%+v\n", input)
 
-	err = app.models.Cars.Update(car)
+	err = app.models.MotorBikes.Update(motorbike)
 
 	if err != nil {
 		switch {
@@ -232,21 +215,21 @@ func (app *application) updateCarHandler(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	}
-	err = app.writeJSON(w, http.StatusOK, envelope{"car": car}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"motorbike": motorbike}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 
 }
 
-func (app *application) deleteCarHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) deleteMotorbikeHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
 		app.notFoundResponse(w, r)
 		return
 	}
 
-	err = app.models.Cars.Delete(id)
+	err = app.models.MotorBikes.Delete(id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -257,14 +240,14 @@ func (app *application) deleteCarHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusOK, envelope{"message": "car successfully deleted"}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "motorbike successfully deleted"}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 
 }
 
-func (app *application) listCarsHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) listMotorbikesHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Name string
 		data.Filters
@@ -276,19 +259,19 @@ func (app *application) listCarsHandler(w http.ResponseWriter, r *http.Request) 
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
 	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
 	input.Filters.Sort = app.readString(qs, "sort", "id")
-	input.Filters.SortSafelist = []string{"id", "name", "body", "-id", "-name", "-body"}
+	input.Filters.SortSafelist = []string{"id", "name", "type", "-id", "-name", "-type"}
 	if data.ValidateFilters(v, input.Filters); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 	// Accept the metadata struct as a return value.
-	cars, metadata, err := app.models.Cars.GetAll(input.Name, input.Filters)
+	motorbikes, metadata, err := app.models.MotorBikes.GetAll(input.Name, input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
 	// Include the metadata in the response envelope.
-	err = app.writeJSON(w, http.StatusOK, envelope{"cars": cars, "metadata": metadata}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"motorbikes": motorbikes, "metadata": metadata}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}

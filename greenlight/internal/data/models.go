@@ -15,19 +15,19 @@ var (
 // Create a Models struct which wraps the MovieModel
 // kind of enveloping
 type Models struct {
-	Movies      MovieModel
 	Permissions PermissionModel // Add a new Permissions field.
 	Tokens      TokenModel
 	Users       UserModel
 	Cars        CarModel
+	MotorBikes  MotorbikeModel
 }
 
 func NewModels(db *sql.DB) Models {
 	return Models{
-		Movies:      MovieModel{DB: db},
 		Permissions: PermissionModel{DB: db}, // Initialize a new PermissionModel instance.
 		Tokens:      TokenModel{DB: db},
 		Users:       UserModel{DB: db},
 		Cars:        CarModel{DB: db},
+		MotorBikes:  MotorbikeModel{DB: db},
 	}
 }

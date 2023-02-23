@@ -26,7 +26,6 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 	Name      string    `json:"name"`
 	Email     string    `json:"email"`
-	Role      string    `json:"-"`
 	Password  password  `json:"-"`
 	Activated bool      `json:"activated"`
 	Version   int       `json:"-"`
@@ -114,10 +113,10 @@ func ValidateUser(v *validator.Validator, user *User) {
 // that we did when creating a movie.
 func (m UserModel) Insert(user *User) error {
 	query := `
-	INSERT INTO users (name, email, password_hash,activated, role )
-	VALUES ($1, $2, $3, $4, $5)
+	INSERT INTO users (name, email, password_hash,activated)
+	VALUES ($1, $2, $3, $4)
 	RETURNING id, created_at, version`
-	args := []any{user.Name, user.Email, user.Password.hash, user.Activated, user.Role}
+	args := []any{user.Name, user.Email, user.Password.hash, user.Activated}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	// If the table already contains a record with this email address, then when we try
@@ -245,4 +244,37 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 	}
 	// Return the matching user.
 	return &user, nil
+}
+
+func (u UserModel) Get(id int64) (*User, error) {
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+
+	query := `
+		SELECT *
+		FROM user
+		WHERE id = $1`
+
+	var user User
+
+	err := u.DB.QueryRow(query, id).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.Name,
+		&user.Email,
+		&user.Password,
+	)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &user, nil
+
 }
