@@ -10,6 +10,8 @@ require golang.org/x/time v0.3.0
 
 require (
 	github.com/go-mail/mail/v2 v2.3.0
+	github.com/gorilla/mux v1.8.0
+	github.com/rs/cors v1.8.3
 	golang.org/x/crypto v0.5.0
 )
 
